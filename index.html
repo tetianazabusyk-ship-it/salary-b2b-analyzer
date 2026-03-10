@@ -357,9 +357,18 @@ async function run(){
   document.getElementById('result').classList.remove('show');
 
   const skillStr=skills.length?skills.join(', '):'general IT';
-  const prompt=`You are a global IT tax and employment law expert. Provide a CONCISE, STRUCTURED, DATA-DENSE analysis for B2B IT contracting in ${country}.
+  const prompt=`You are a global IT B2B tax and legal expert with access to official government sources. Analyze B2B/freelance IT contracting in ${country} for: Role: ${role} | Skills: ${skillStr}
 
-Role: ${role} | Skills: ${skillStr}
+CRITICAL RULES — VIOLATIONS WILL MAKE THE TOOL USELESS:
+1. ONLY provide B2B/freelance/self-employment data — NOT employment/salary data
+2. For taxes: ONLY taxes paid by a self-employed person/sole trader/individual entrepreneur — NOT employer taxes
+3. If B2B is restricted for foreigners, say so explicitly in verdict and who_can fields
+4. Salary ranges = typical B2B CONTRACT RATES (what clients pay), not employment salaries
+5. If you are not confident about a specific number, use a range and note uncertainty
+6. Singapore: B2B as foreigner requires EntrePass or EP — verdict must be CONDITIONAL
+7. Poland: B2B = JDG (jednoosobowa działalność gospodarcza) — taxes are ryczałt/liniowy/skala, NOT employment PIT
+8. UAE: 0% income tax for individuals, but note VAT registration threshold
+9. Always distinguish between: local market rates vs international client rates
 
 RESPOND ONLY IN THE FOLLOWING JSON FORMAT (no markdown, no extra text):
 
@@ -412,11 +421,24 @@ RESPOND ONLY IN THE FOLLOWING JSON FORMAT (no markdown, no extra text):
   },
   "risks": ["Risk 1","Risk 2","Risk 3"],
   "confidence": "HIGH" | "MEDIUM" | "LOW",
-  "confidence_note": "why",
-  "data_date": "as of [month year]"
+  "confidence_note": "why — be specific about what you are uncertain about",
+  "data_date": "as of [month year]",
+  "sources": [
+    "https://official-tax-authority.gov/self-employment",
+    "https://government-portal.gov/freelance-registration"
+  ]
 }
 
-RULES: All salaries in USD/month gross. Use correct step types for calculator. Include ALL public holidays.`;
+IMPORTANT VERIFICATION RULES:
+- All salary figures = B2B contract rates in USD gross/month (what the client pays you)
+- Tax steps = ONLY self-employed person taxes, never employer contributions
+- For each country double-check: is B2B legal? who can do it (residents only? foreigners?)
+- If country has special IT tax regimes (Ukraine FOP, Georgia Small Business, Estonia e-Residency) — use those
+- Confidence=HIGH only if you are certain about the specific B2B regime
+- Confidence=MEDIUM if general framework is clear but some rates may vary
+- Confidence=LOW if you are unsure — better to say LOW than give wrong data
+- Include ALL official public holidays, not just examples
+- sources: add a "sources" array with 2-3 official URLs the user should verify (e.g. tax authority website, government portal)`;
 
   try{
     const resp=await fetch(PROXY,{
@@ -462,7 +484,7 @@ function renderResult(country,role,skills,d){
   ${d.job_boards?.length?`<div class="sec"><div class="sec-h" onclick="tog(this)"><span class="sec-ico">📋</span><span class="sec-ttl">Job Boards · ${country}</span><span class="sec-arr">▶</span></div><div class="sec-body"><table class="tbl"><thead><tr><th>Platform</th><th>Type</th><th class="num">Traffic</th><th class="num">Cost</th><th>Best For</th></tr></thead><tbody>${jbRows}</tbody></table></div></div>`:''}
   ${d.leave_and_holidays?`<div class="sec"><div class="sec-h" onclick="tog(this)"><span class="sec-ico">🏖️</span><span class="sec-ttl">Leave & Holidays · ${country}</span><span class="sec-arr">▶</span></div><div class="sec-body"><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px"><div style="background:var(--s2);border-radius:10px;padding:14px 16px;border:1px solid var(--bd)"><div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--tx3);margin-bottom:6px">Annual Leave</div><div style="font-size:28px;font-weight:800;color:var(--g);font-family:var(--mono)">${d.leave_and_holidays.annual_leave_days}</div><div style="font-size:12px;color:var(--tx2);margin-top:4px">working days statutory</div></div><div style="background:var(--s2);border-radius:10px;padding:14px 16px;border:1px solid var(--bd)"><div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--tx3);margin-bottom:6px">Public Holidays</div><div style="font-size:28px;font-weight:800;color:var(--b);font-family:var(--mono)">${d.leave_and_holidays.public_holidays_count}</div><div style="font-size:12px;color:var(--tx2);margin-top:4px">days per year</div></div></div>${d.leave_and_holidays.public_holidays_list?.length?`<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px;margin-bottom:12px">${d.leave_and_holidays.public_holidays_list.map(h=>`<div style="background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;gap:8px"><div style="font-size:12px;color:var(--tx)">${h.name}</div><div style="font-size:11px;color:var(--tx3);font-family:var(--mono)">${h.date}</div></div>`).join('')}</div>`:''}<div class="blk blk-o"><div class="blk-t">B2B Note</div>${d.leave_and_holidays.b2b_note||''}${d.leave_and_holidays.sick_leave_note?`<br><br>${d.leave_and_holidays.sick_leave_note}`:''}</div></div></div>`:''}
   ${d.risks?.length?`<div class="sec"><div class="sec-h" onclick="tog(this)"><span class="sec-ico">⚠️</span><span class="sec-ttl">Risks & Red Flags</span><span class="sec-arr">▶</span></div><div class="sec-body"><div class="blk blk-r"><ul style="padding-left:16px;list-style:disc">${risks}</ul></div></div></div>`:''}
-  <div class="src"><div class="src-lbl">// Data quality</div><div class="src-note">Confidence: <span style="color:${d.confidence==='HIGH'?'var(--g)':d.confidence==='MEDIUM'?'var(--y)':'var(--r)'}">${d.confidence||'—'}</span>${d.confidence_note?` — ${d.confidence_note}`:''}${d.data_date?` · ${d.data_date}`:''}<br>⚠️ Not legal/tax advice. Verify with a local advisor before signing contracts.</div></div>`;
+  <div class="src"><div class="src-lbl">// Data quality & Sources</div><div class="src-note">Confidence: <span style="color:${d.confidence==='HIGH'?'var(--g)':d.confidence==='MEDIUM'?'var(--y)':'var(--r)'}">${d.confidence||'—'}</span>${d.confidence_note?` — ${d.confidence_note}`:''}${d.data_date?` · ${d.data_date}`:''}<br><br>${d.sources?.length?`📚 Verify at: ${d.sources.map(s=>`<a href="${s}" target="_blank" style="color:var(--b)">${s}</a>`).join(' · ')}<br><br>`:''}⚠️ AI-generated data — always verify with official sources and a local tax advisor before signing contracts.</div></div>`;
   window._TAX_FORMULA=d.tax_formula;
   const el=document.getElementById('result');
   el.innerHTML=html;el.classList.add('show');
